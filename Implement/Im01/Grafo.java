@@ -188,11 +188,8 @@ public class Grafo {
 
         try {
             // 1. Solicitar informações do usuário
-            // 1System.out.print("Digite o nome do arquivo do grafo (ex:
-            // graph-test-100-1.txt): ");
-            String nomeArquivo = "C:/Users/USER/Documents/GitHub/Grafos/Implement/Im01/graph-test-50000-1.txt";
-            // "C:/Users/USER/Documents/GitHub/Grafos/Implement/Im01/graph-test-100-1.txt";
-            // - certo
+            System.out.print("Digite o nome do arquivo do grafo: ");
+            String nomeArquivo = scanner.nextLine();
 
             System.out.print("Digite o número do vértice para análise: ");
             int verticeAnalisado = scanner.nextInt();
