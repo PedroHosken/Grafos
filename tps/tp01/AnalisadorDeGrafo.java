@@ -58,6 +58,110 @@ public class AnalisadorDeGrafo {
 
     }
 
+    public static List<Integer> encontrarCaminhoEulerianoFleury(Grafo grafo, boolean usarTarjan) {
+        // 1. Verificar as condições
+        List<Integer> impares = encontrarVerticesGrauImpar(grafo);
+        if (impares.size() != 0 && impares.size() != 2) {
+            System.out.println(
+                    "O grafo não é Euleriano nem Semi-Euleriano. Número de vértices ímpares: " + impares.size());
+            return new ArrayList<>();
+        }
+
+        Grafo grafoCopia = grafo.copiar();
+
+        // Contar o total de arestas para o nosso print de depuração
+        int totalArestas = 0;
+        for (int i = 0; i < grafo.getV(); i++) {
+            totalArestas += grafo.getAdj()[i].size();
+        }
+        totalArestas /= 2; // Como o grafo é não-direcionado, cada aresta é contada duas vezes
+
+        // 2. Determinar o vértice inicial
+        int u = 0;
+        if (!impares.isEmpty()) {
+            u = impares.get(0);
+        } else {
+            for (int i = 0; i < grafoCopia.getV(); i++) {
+                if (!grafoCopia.getAdj()[i].isEmpty()) {
+                    u = i;
+                    break;
+                }
+            }
+        }
+
+        // 3. Construir o caminho
+        List<Integer> caminho = new ArrayList<>();
+        caminho.add(u);
+
+        int arestasProcessadas = 0;
+        while (true) {
+            // --- LINHA DE DEPURAÇÃO ADICIONADA ---
+            // Imprime o progresso a cada 10 arestas processadas
+            if (arestasProcessadas % 10 == 0) {
+                System.out.println(
+                        "Progresso: " + arestasProcessadas + " de " + totalArestas + " arestas encontradas...");
+            }
+            // ------------------------------------
+
+            List<Integer> vizinhos = grafoCopia.getAdj()[u];
+            if (vizinhos.isEmpty()) {
+                break;
+            }
+
+            int v = -1;
+
+            if (vizinhos.size() == 1) {
+                v = vizinhos.get(0);
+            } else {
+                for (int vizinhoCandidato : vizinhos) {
+                    if (!ehPonte(u, vizinhoCandidato, grafoCopia, usarTarjan)) {
+                        v = vizinhoCandidato;
+                        break;
+                    }
+                }
+                if (v == -1) {
+                    v = vizinhos.get(0);
+                }
+            }
+
+            grafoCopia.removerAresta(u, v);
+            caminho.add(v);
+            u = v;
+            arestasProcessadas++;
+        }
+
+        System.out.println("Progresso: " + arestasProcessadas + " de " + totalArestas + " arestas encontradas..."); // Print
+                                                                                                                    // final
+        return caminho;
+    }
+
+    /**
+     * Verifica se uma aresta (u, v) é uma ponte no grafo atual.
+     * Encapsula a chamada para o método de verificação de conectividade.
+     * O parâmetro usarTarjan é mantido para consistência, mas a verificação
+     * de conectividade é a mais eficiente aqui.
+     */
+    private static boolean ehPonte(int u, int v, Grafo grafo, boolean usarTarjan) {
+        // A lógica é a mesma, independentemente do método original de encontrar todas
+        // as pontes.
+        // O teste de ponte para Fleury é sempre sobre o estado ATUAL do grafo.
+        grafo.removerAresta(u, v);
+        boolean desconectado = !ehConexo(grafo);
+        grafo.adicionarAresta(u, v); // Adiciona a aresta de volta
+        return desconectado;
+    }
+
+    // Adicione o método `encontrarVerticesGrauImpar` se ainda não o tiver
+    public static List<Integer> encontrarVerticesGrauImpar(Grafo grafo) {
+        List<Integer> impares = new ArrayList<>();
+        for (int i = 0; i < grafo.getV(); i++) {
+            if (grafo.getAdj()[i].size() % 2 != 0) {
+                impares.add(i);
+            }
+        }
+        return impares;
+    }
+
     /**
      * Método auxiliar recursivo para a Busca em Profundidade (DFS).
      *
@@ -244,35 +348,31 @@ public class AnalisadorDeGrafo {
 
     public static void main(String[] args) {
         try {
-            String caminho = "C:/Users/USER/Documents/GitHub/Grafos/tps/tp01/graph-test-100-1.txt";
+            // Teste com um grafo que sabemos ser semi-euleriano (criado anteriormente)
+            String caminho = "C:/Users/USER/Documents/GitHub/Grafos/tps/tp01/grafo_100_euleriano.txt";
             Grafo meuGrafo = carregarDeArquivo(caminho);
 
-            // --- Teste com Método Naive ---
-            System.out.println("\n--- Método Naive ---");
+            System.out.println("\n--- Fleury com Detecção Naive ---");
             long startTimeNaive = System.currentTimeMillis();
-            List<int[]> pontesNaive = encontrarPontesNaive(meuGrafo.copiar()); // Usamos uma cópia, pois o método Naive
-                                                                               // modifica o grafo
+            List<Integer> caminhoNaive = encontrarCaminhoEulerianoFleury(meuGrafo, false);
             long endTimeNaive = System.currentTimeMillis();
             System.out.println("Busca finalizada em " + (endTimeNaive - startTimeNaive) + " ms.");
-            System.out.println("Pontes encontradas: " + pontesNaive.size());
+            // Imprime o caminho de forma invertida, pois a recursão o constrói ao contrário
+            // Collections.reverse(caminhoNaive);
+            // System.out.println("Caminho encontrado ("+caminhoNaive.size()+" arestas): " +
+            // caminhoNaive);
 
-            // --- Teste com Algoritmo de Tarjan ---
-            System.out.println("\n--- Algoritmo de Tarjan ---");
+            System.out.println("\n--- Fleury com Detecção por Tarjan ---");
             long startTimeTarjan = System.currentTimeMillis();
-            List<int[]> pontesTarjan = encontrarPontesTarjan(meuGrafo);
+            List<Integer> caminhoTarjan = encontrarCaminhoEulerianoFleury(meuGrafo, true);
             long endTimeTarjan = System.currentTimeMillis();
             System.out.println("Busca finalizada em " + (endTimeTarjan - startTimeTarjan) + " ms.");
-            System.out.println("Pontes encontradas: " + pontesTarjan.size());
-
-            // Opcional: imprimir as pontes encontradas por Tarjan
-            // for (int[] ponte : pontesTarjan) {
-            // System.out.println("Aresta: (" + (ponte[0] + 1) + ", " + (ponte[1] + 1) +
-            // ")");
-            // }
+            // Collections.reverse(caminhoTarjan);
+            // System.out.println("Caminho encontrado ("+caminhoTarjan.size()+" arestas): "
+            // + caminhoTarjan);
 
         } catch (FileNotFoundException e) {
             System.err.println("Erro: O arquivo do grafo não foi encontrado.");
-            e.printStackTrace();
         }
     }
 }
@@ -295,4 +395,31 @@ public class AnalisadorDeGrafo {
  * e.printStackTrace();
  * }
  * 
+ * 
+ * 
+ * // --- Teste com Método Naive ---
+ * System.out.println("\n--- Método Naive ---");
+ * long startTimeNaive = System.currentTimeMillis();
+ * List<int[]> pontesNaive = encontrarPontesNaive(meuGrafo.copiar()); // Usamos
+ * uma cópia, pois o método Naive
+ * // modifica o grafo
+ * long endTimeNaive = System.currentTimeMillis();
+ * System.out.println("Busca finalizada em " + (endTimeNaive - startTimeNaive) +
+ * " ms.");
+ * System.out.println("Pontes encontradas: " + pontesNaive.size());
+ * 
+ * // --- Teste com Algoritmo de Tarjan ---
+ * System.out.println("\n--- Algoritmo de Tarjan ---");
+ * long startTimeTarjan = System.currentTimeMillis();
+ * List<int[]> pontesTarjan = encontrarPontesTarjan(meuGrafo);
+ * long endTimeTarjan = System.currentTimeMillis();
+ * System.out.println("Busca finalizada em " + (endTimeTarjan - startTimeTarjan)
+ * + " ms.");
+ * System.out.println("Pontes encontradas: " + pontesTarjan.size());
+ * 
+ * // Opcional: imprimir as pontes encontradas por Tarjan
+ * // for (int[] ponte : pontesTarjan) {
+ * // System.out.println("Aresta: (" + (ponte[0] + 1) + ", " + (ponte[1] + 1) +
+ * // ")");
+ * // }
  */
