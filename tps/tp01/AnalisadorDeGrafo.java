@@ -74,7 +74,7 @@ public class AnalisadorDeGrafo {
         for (int i = 0; i < grafo.getV(); i++) {
             totalArestas += grafo.getAdj()[i].size();
         }
-        totalArestas /= 2; // Como o grafo é não-direcionado, cada aresta é contada duas vezes
+        totalArestas /= 2;
 
         // 2. Determinar o vértice inicial
         int u = 0;
@@ -95,16 +95,26 @@ public class AnalisadorDeGrafo {
 
         int arestasProcessadas = 0;
         while (true) {
-            // --- LINHA DE DEPURAÇÃO ADICIONADA ---
-            // Imprime o progresso a cada 10 arestas processadas
             if (arestasProcessadas % 10 == 0) {
                 System.out.println(
                         "Progresso: " + arestasProcessadas + " de " + totalArestas + " arestas encontradas...");
             }
-            // ------------------------------------
 
             List<Integer> vizinhos = grafoCopia.getAdj()[u];
+
+            // DEBUG: Verificar situação atual
             if (vizinhos.isEmpty()) {
+                System.out.println("\n[DEBUG] Parou no vértice " + u + " sem vizinhos.");
+                System.out.println("[DEBUG] Arestas processadas: " + arestasProcessadas + " de " + totalArestas);
+
+                // Contar quantas arestas ainda restam no grafo
+                int arestasRestantes = 0;
+                for (int i = 0; i < grafoCopia.getV(); i++) {
+                    arestasRestantes += grafoCopia.getAdj()[i].size();
+                }
+                arestasRestantes /= 2;
+                System.out.println("[DEBUG] Arestas ainda restantes no grafo: " + arestasRestantes);
+
                 break;
             }
 
@@ -113,13 +123,16 @@ public class AnalisadorDeGrafo {
             if (vizinhos.size() == 1) {
                 v = vizinhos.get(0);
             } else {
+                // Tenta encontrar uma aresta que não seja ponte
                 for (int vizinhoCandidato : vizinhos) {
                     if (!ehPonte(u, vizinhoCandidato, grafoCopia, usarTarjan)) {
                         v = vizinhoCandidato;
                         break;
                     }
                 }
+                // Se todos são pontes, pega o primeiro
                 if (v == -1) {
+                    System.out.println("\n[DEBUG] Todos os vizinhos de " + u + " são pontes! Vizinhos: " + vizinhos);
                     v = vizinhos.get(0);
                 }
             }
@@ -130,25 +143,45 @@ public class AnalisadorDeGrafo {
             arestasProcessadas++;
         }
 
-        System.out.println("Progresso: " + arestasProcessadas + " de " + totalArestas + " arestas encontradas..."); // Print
-                                                                                                                    // final
+        System.out.println("Progresso: " + arestasProcessadas + " de " + totalArestas + " arestas encontradas...");
         return caminho;
     }
 
-    /**
-     * Verifica se uma aresta (u, v) é uma ponte no grafo atual.
-     * Encapsula a chamada para o método de verificação de conectividade.
-     * O parâmetro usarTarjan é mantido para consistência, mas a verificação
-     * de conectividade é a mais eficiente aqui.
-     */
     private static boolean ehPonte(int u, int v, Grafo grafo, boolean usarTarjan) {
-        // A lógica é a mesma, independentemente do método original de encontrar todas
-        // as pontes.
-        // O teste de ponte para Fleury é sempre sobre o estado ATUAL do grafo.
-        grafo.removerAresta(u, v);
-        boolean desconectado = !ehConexo(grafo);
-        grafo.adicionarAresta(u, v); // Adiciona a aresta de volta
-        return desconectado;
+        if (usarTarjan) {
+            // Estratégia 2: Usar algoritmo de Tarjan
+            List<int[]> pontesAtuais = encontrarPontesTarjan(grafo);
+
+            // Verifica se a aresta (u, v) está na lista de pontes
+            for (int[] ponte : pontesAtuais) {
+                if ((ponte[0] == u && ponte[1] == v) || (ponte[0] == v && ponte[1] == u)) {
+                    return true;
+                }
+            }
+            return false;
+
+        } else {
+            // Estratégia 1: Método Naïve (verificação de conectividade)
+
+            // DEBUG: Contar arestas restantes antes
+            int arestasAntes = 0;
+            for (int i = 0; i < grafo.getV(); i++) {
+                arestasAntes += grafo.getAdj()[i].size();
+            }
+            arestasAntes /= 2;
+
+            grafo.removerAresta(u, v);
+            boolean desconectado = !ehConexo(grafo);
+            grafo.adicionarAresta(u, v);
+
+            // DEBUG: Só imprime quando detecta ponte
+            if (desconectado) {
+                System.out.println(
+                        "  [DEBUG] Ponte detectada: (" + u + ", " + v + ") | Arestas restantes: " + arestasAntes);
+            }
+
+            return desconectado;
+        }
     }
 
     // Adicione o método `encontrarVerticesGrauImpar` se ainda não o tiver
@@ -182,20 +215,10 @@ public class AnalisadorDeGrafo {
         }
     }
 
-    /**
-     * Verifica se o grafo é conectado.
-     * Utiliza uma DFS para contar quantos vértices são alcançáveis a partir de um
-     * vértice inicial.
-     *
-     * @param grafo O grafo a ser verificado.
-     * @return true se o grafo for conectado, false caso contrário.
-     */
     private static boolean ehConexo(Grafo grafo) {
-        // Array para marcar os vértices visitados na DFS
         boolean[] visitados = new boolean[grafo.getV()];
 
-        // Encontra o primeiro vértice com algum vizinho para iniciar a busca.
-        // Isso lida com o caso de vértices isolados.
+        // 1. Encontra o primeiro vértice com grau > 0 para iniciar a busca.
         int verticeInicial = -1;
         for (int i = 0; i < grafo.getV(); i++) {
             if (!grafo.getAdj()[i].isEmpty()) {
@@ -204,34 +227,25 @@ public class AnalisadorDeGrafo {
             }
         }
 
-        // Se não houver arestas no grafo, consideramos conectado se tiver 0 ou 1
-        // vértice.
+        // Se não há mais arestas no grafo, ele é considerado "conexo" (não há nada para
+        // desconectar).
         if (verticeInicial == -1) {
-            return grafo.getV() <= 1;
+            return true;
         }
 
-        // Inicia a DFS a partir do vértice inicial
+        // 2. Executa a DFS a partir do vértice inicial.
         dfsUtil(verticeInicial, visitados, grafo);
 
-        // Conta quantos vértices foram visitados
-        int verticesVisitados = 0;
+        // 3. Verifica se todos os outros vértices com arestas foram visitados.
         for (int i = 0; i < grafo.getV(); i++) {
-            // Só contamos os vértices que fazem parte do componente principal (têm arestas)
-            if (visitados[i] && !grafo.getAdj()[i].isEmpty()) {
-                verticesVisitados++;
+            // Se um vértice tem arestas mas não foi visitado, o grafo está desconexo.
+            if (!grafo.getAdj()[i].isEmpty() && !visitados[i]) {
+                return false;
             }
         }
 
-        int totalVerticesComArestas = 0;
-        for (int i = 0; i < grafo.getV(); i++) {
-            if (!grafo.getAdj()[i].isEmpty()) {
-                totalVerticesComArestas++;
-            }
-        }
-
-        // Se o número de vértices visitados for igual ao total de vértices
-        // que têm arestas, o grafo está conectado.
-        return verticesVisitados == totalVerticesComArestas;
+        // Se todos os vértices com arestas foram visitados, o grafo está conectado.
+        return true;
     }
 
     /**
@@ -349,7 +363,7 @@ public class AnalisadorDeGrafo {
     public static void main(String[] args) {
         try {
             // Teste com um grafo que sabemos ser semi-euleriano (criado anteriormente)
-            String caminho = "C:/Users/USER/Documents/GitHub/Grafos/tps/tp01/grafo_100_euleriano.txt";
+            String caminho = "C:/Users/USER/Documents/GitHub/Grafos/tps/tp01/grafo_100_semi_euleriano.txt";
             Grafo meuGrafo = carregarDeArquivo(caminho);
 
             System.out.println("\n--- Fleury com Detecção Naive ---");
@@ -358,18 +372,16 @@ public class AnalisadorDeGrafo {
             long endTimeNaive = System.currentTimeMillis();
             System.out.println("Busca finalizada em " + (endTimeNaive - startTimeNaive) + " ms.");
             // Imprime o caminho de forma invertida, pois a recursão o constrói ao contrário
-            // Collections.reverse(caminhoNaive);
-            // System.out.println("Caminho encontrado ("+caminhoNaive.size()+" arestas): " +
-            // caminhoNaive);
+            System.out.println("Caminho encontrado (" + caminhoNaive.size() + " arestas): " +
+                    caminhoNaive);
 
             System.out.println("\n--- Fleury com Detecção por Tarjan ---");
             long startTimeTarjan = System.currentTimeMillis();
             List<Integer> caminhoTarjan = encontrarCaminhoEulerianoFleury(meuGrafo, true);
             long endTimeTarjan = System.currentTimeMillis();
             System.out.println("Busca finalizada em " + (endTimeTarjan - startTimeTarjan) + " ms.");
-            // Collections.reverse(caminhoTarjan);
-            // System.out.println("Caminho encontrado ("+caminhoTarjan.size()+" arestas): "
-            // + caminhoTarjan);
+            System.out.println("Caminho encontrado (" + caminhoTarjan.size() + " arestas): "
+                    + caminhoTarjan);
 
         } catch (FileNotFoundException e) {
             System.err.println("Erro: O arquivo do grafo não foi encontrado.");
