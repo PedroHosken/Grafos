@@ -1,203 +1,156 @@
 package tps.tp02;
 
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Scanner;
 
 /**
- * Classe principal para testar as implementações do problema dos k-centros.
- * 
- * Para testar um arquivo, altere a variável FILENAME abaixo com o caminho do arquivo.
- * O valor de k (número de centros) será lido automaticamente do arquivo.
+ * Classe principal para testar UMA instância (arquivo) de cada vez.
+ * * Este programa pede ao usuário o nome do arquivo,
+ * carrega-o, e executa as soluções Exata e Aproximada,
+ * mostrando uma comparação dos resultados.
  */
 public class Main {
 
-    // ========================================================================
-    // CONFIGURAÇÃO: Altere aqui o caminho do arquivo que deseja testar
-    // ========================================================================
-    private static final String FILENAME = "C:/Users/USER/Documents/GitHub/Grafos/tps/tp02/pmed1.txt";
-    // Exemplos:
-    // private static final String FILENAME = "pmed1.txt";
-    // private static final String FILENAME = "pmed10.txt";
-    // private static final String FILENAME = "pmed40.txt";
-    // ========================================================================
-
     public static void main(String[] args) {
-        System.out.println("=================================================================");
-        System.out.println("TESTE - PROBLEMA DOS K-CENTROS");
-        System.out.println("=================================================================");
-        System.out.println("Arquivo: " + FILENAME);
-        System.out.println();
+        // Define o Locale para usar ponto (.) como separador decimal no printf
+        Locale.setDefault(Locale.US);
+
+        // Objeto para ler a entrada do usuário (nome do arquivo)
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.println("--- Testador de Instâncias k-Centros ---");
+        System.out.print("Digite o nome do arquivo (ex: pmed1.txt): ");
+        String nomeArquivo = scanner.nextLine().trim();
 
         try {
-            // Ler o valor de p (número de centros) do arquivo
-            int p = readPFromFile(FILENAME);
-            System.out.println("Número de centros (p): " + p);
-            System.out.println();
+            // Construir o caminho completo do arquivo
+            String caminhoArquivo = construirCaminhoArquivo(nomeArquivo);
 
-            // Testar o arquivo
-            testFile(FILENAME, p);
+            // --- 1. Carregar a Instância ---
+            System.out.println("\nProcessando arquivo: " + caminhoArquivo + "...");
+            Instancia instancia = new Instancia(caminhoArquivo);
+            System.out.println("Instância carregada: V=" + instancia.getV() + ", k=" + instancia.getK());
+            System.out.println("----------------------------------------------");
 
-            System.out.println();
-            System.out.println("✓ Teste concluído com sucesso!");
+            // --- 2. Executar Solução Aproximada ---
+            // (Sempre executamos esta, pois é rápida)
+            SolucaoAproximada aprox = new SolucaoAproximada(instancia);
+            SolucaoAproximada.Resultado resAprox = aprox.resolver();
 
-        } catch (FileNotFoundException e) {
-            System.err.println("✗ Erro: Arquivo não encontrado: " + FILENAME);
-            System.err.println("Verifique se o arquivo está no diretório correto.");
-            System.exit(1);
+            System.out.println("\n--- 1. Resultado (Aproximada / Farthest-First) ---");
+            System.out.printf("Tempo de Execução: %.4f ms%n", resAprox.tempoExecucaoMs);
+            System.out.println("Raio Encontrado:   " + resAprox.raio);
+            System.out.println("Centros: " + formatarCentros(resAprox.centros));
+            System.out.println("----------------------------------------------");
+
+            // --- 3. Executar Solução Exata (com aviso) ---
+            System.out.println("\n--- 2. Resultado (Exata / Força Bruta) ---");
+            System.out.println("AVISO: A solução exata (V=" + instancia.getV() + ", k=" + instancia.getK()
+                    + ") pode demorar MUITO.");
+            System.out.print("Deseja executá-la? (s/n): ");
+
+            String resposta = scanner.nextLine().trim().toLowerCase();
+
+            if (resposta.equals("s")) {
+                SolucaoExata exata = new SolucaoExata(instancia);
+                SolucaoExata.Resultado resExato = exata.resolver();
+
+                System.out.println("\nSolução Exata Concluída.");
+                System.out.printf("Tempo de Execução: %.4f ms%n", resExato.tempoExecucaoMs);
+                System.out.println("Raio Encontrado:   " + resExato.raio);
+                System.out.println("Centros: " + formatarCentros(resExato.centros));
+
+                // Comparação final
+                System.out.println("\n--- Comparação Final ---");
+                System.out.printf("Raio (Aproximado): %d (%.4f ms)%n", resAprox.raio, resAprox.tempoExecucaoMs);
+                System.out.printf("Raio (Exato):      %d (%.4f ms)%n", resExato.raio, resExato.tempoExecucaoMs);
+
+                if (resExato.raio > 0) {
+                    double gap = 100.0 * (resAprox.raio - resExato.raio) / (double) resExato.raio;
+                    System.out.printf("Gap (Aprox. vs Exato): %.2f%%%n", gap);
+                }
+
+            } else {
+                System.out.println("Execução da solução exata pulada.");
+            }
+
+            System.out.println("----------------------------------------------");
+            System.out.println("Teste concluído.");
+
         } catch (Exception e) {
-            System.err.println("✗ Erro ao processar: " + e.getMessage());
+            System.err.println("Ocorreu um erro ao processar o arquivo: " + e.getMessage());
             e.printStackTrace();
-            System.exit(1);
+        } finally {
+            scanner.close();
         }
     }
 
     /**
-     * Lê o valor de p (número de centros) da primeira linha do arquivo.
+     * Constrói o caminho completo do arquivo baseado no diretório do projeto.
+     * Se o arquivo já tiver um caminho absoluto ou relativo válido, usa esse.
+     * Caso contrário, procura no diretório tps/tp02/.
+     * 
+     * @param nomeArquivo Nome do arquivo fornecido pelo usuário
+     * @return Caminho completo do arquivo
      */
-    private static int readPFromFile(String filename) throws FileNotFoundException {
-        File file = new File(filename);
-        Scanner scanner = new Scanner(file);
-        
-        // Ler n, m, p da primeira linha
-        @SuppressWarnings("unused")
-        int n = scanner.nextInt();
-        @SuppressWarnings("unused")
-        int m = scanner.nextInt();
-        int p = scanner.nextInt();
-        
-        scanner.close();
-        return p;
-    }
-
-    /**
-     * Testa um arquivo específico.
-     */
-    private static void testFile(String filename, int k) throws FileNotFoundException {
-        System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("Carregando grafo...");
-        
-        long startTime = System.currentTimeMillis();
-
-        // Ler o grafo
-        CompleteGraph graph = ORLibraryReader.readFromFileAuto(filename);
-        int numVertices = graph.getNumVertices();
-        
-        long loadTime = System.currentTimeMillis() - startTime;
-        System.out.println("✓ Grafo carregado!");
-        System.out.println("  Vértices: " + numVertices);
-        System.out.println("  Tempo de carregamento: " + loadTime + " ms");
-        System.out.println();
-
-        // Resolver com algoritmo aproximado (sempre executado)
-        System.out.println("--- Algoritmo Aproximado (Guloso) ---");
-        long approxStartTime = System.currentTimeMillis();
-        ApproximateKCenters approxSolver = new ApproximateKCenters(graph, k);
-        int[] approxCenters = approxSolver.solve();
-        double approxRadius = approxSolver.getRadius();
-        long approxTimeMs = System.currentTimeMillis() - approxStartTime;
-
-        System.out.println("Centros encontrados: " + arrayToString(approxCenters));
-        System.out.printf("Raio da solução: %.4f\n", approxRadius);
-        System.out.println("Tempo de execução: " + approxTimeMs + " ms");
-        System.out.println();
-
-        // Tentar resolver com algoritmo exato
-        long combinations = binomialCoefficient(numVertices, k);
-        
-        System.out.println("--- Algoritmo Exato ---");
-        
-        // Decidir qual algoritmo exato usar baseado no tamanho da instância
-        boolean useBranchBound = (numVertices <= 40 && combinations <= 10_000_000);
-        boolean useBruteForce = (numVertices <= 20 && combinations <= 1_000_000);
-        
-        if (!useBranchBound && !useBruteForce) {
-            System.out.println("AVISO: Número de combinações muito grande (" + 
-                (combinations > 1_000_000 ? ">1M" : combinations) + ")");
-            System.out.println("Algoritmo exato não será executado (instância muito grande).");
-            System.out.println("(Branch and Bound: n <= 40, Força Bruta: n <= 20 aproximadamente)");
-        } else {
-            long exactStartTime = System.currentTimeMillis();
-            int[] exactCenters;
-            double exactRadius;
-            String algorithmName;
-            
-            if (useBranchBound) {
-                // Usar Branch and Bound (mais eficiente para instâncias médias)
-                algorithmName = "Branch and Bound";
-                System.out.println("Método: Branch and Bound (com podas)");
-                BranchBoundKCenters bbSolver = new BranchBoundKCenters(graph, k);
-                exactCenters = bbSolver.solve();
-                exactRadius = bbSolver.getBestRadius();
-                System.out.println("Nós explorados: " + bbSolver.getNodesExplored());
-                System.out.println("Nós podados: " + bbSolver.getNodesPruned());
-            } else {
-                // Usar Força Bruta (apenas para instâncias muito pequenas)
-                algorithmName = "Força Bruta";
-                System.out.println("Método: Força Bruta");
-                ExactKCenters exactSolver = new ExactKCenters(graph, k);
-                exactCenters = exactSolver.solve();
-                exactRadius = exactSolver.getBestRadius();
+    private static String construirCaminhoArquivo(String nomeArquivo) {
+        // Se já for um caminho absoluto ou contém separadores de diretório, usa direto
+        if (nomeArquivo.contains(File.separator) || nomeArquivo.contains("/") || nomeArquivo.contains("\\")) {
+            // Se começa com drive letter (Windows) ou / (Unix), é absoluto
+            if (nomeArquivo.length() > 1 && (nomeArquivo.charAt(1) == ':' || nomeArquivo.startsWith("/"))) {
+                return nomeArquivo;
             }
-            
-            long exactTimeMs = System.currentTimeMillis() - exactStartTime;
-
-            System.out.println("Centros encontrados: " + arrayToString(exactCenters));
-            System.out.printf("Raio da solução: %.4f\n", exactRadius);
-            System.out.println("Tempo de execução: " + exactTimeMs + " ms");
-            System.out.println();
-
-            // Comparar resultados
-            System.out.println("═══════════════════════════════════════════════════════════════");
-            System.out.println("COMPARAÇÃO");
-            System.out.println("═══════════════════════════════════════════════════════════════");
-            double ratio = approxRadius / exactRadius;
-            System.out.printf("Razão (Aproximado/Exato): %.4f\n", ratio);
-            System.out.printf("Fator de aproximação: %.2fx\n", ratio);
-            
-            if (ratio <= 2.0) {
-                System.out.println("✓ Aproximação dentro do limite teórico (2x)");
-            } else {
-                System.out.println("⚠ Aproximação acima do limite teórico esperado");
+            // Caminho relativo - tenta construir a partir do diretório atual
+            File arquivo = new File(nomeArquivo);
+            if (arquivo.exists()) {
+                return arquivo.getAbsolutePath();
             }
-            
-            System.out.printf("Diferença de tempo: %d ms (%s) vs %d ms (Aproximado)\n",
-                    exactTimeMs, algorithmName, approxTimeMs);
-            double speedup = (double) exactTimeMs / approxTimeMs;
-            System.out.printf("Speedup: %.2fx mais rápido (Aproximado)\n", speedup);
         }
+
+        // Tenta encontrar no diretório tps/tp02/ (diretório padrão)
+        // Primeiro tenta a partir do diretório de trabalho atual
+        String[] caminhosPossiveis = {
+                "tps" + File.separator + "tp02" + File.separator + nomeArquivo,
+                "tps/tp02/" + nomeArquivo,
+                System.getProperty("user.dir") + File.separator + "tps" + File.separator + "tp02" + File.separator
+                        + nomeArquivo
+        };
+
+        for (String caminho : caminhosPossiveis) {
+            File arquivo = new File(caminho);
+            if (arquivo.exists() && arquivo.isFile()) {
+                return arquivo.getAbsolutePath();
+            }
+        }
+
+        // Se não encontrou, tenta no diretório atual
+        File arquivoAtual = new File(nomeArquivo);
+        if (arquivoAtual.exists()) {
+            return arquivoAtual.getAbsolutePath();
+        }
+
+        // Se ainda não encontrou, retorna o caminho relativo ao tps/tp02/
+        // (o Instancia tentará ler e lançará exceção se não existir)
+        return "tps" + File.separator + "tp02" + File.separator + nomeArquivo;
     }
 
     /**
-     * Converte um array em string formatada.
+     * Método auxiliar para formatar o array de centros para impressão.
+     * (Converte de 0-indexado para 1-indexado).
      */
-    private static String arrayToString(int[] arr) {
-        if (arr == null || arr.length == 0) {
+    private static String formatarCentros(int[] centros) {
+        if (centros == null || centros.length == 0) {
             return "[]";
         }
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < arr.length; i++) {
-            sb.append(arr[i]);
-            if (i < arr.length - 1) {
-                sb.append(", ");
-            }
-        }
-        sb.append("]");
-        return sb.toString();
-    }
+        // Faz uma cópia para não alterar o array original
+        int[] centrosCopia = Arrays.copyOf(centros, centros.length);
 
-    /**
-     * Calcula o coeficiente binomial C(n, k).
-     */
-    private static long binomialCoefficient(int n, int k) {
-        if (k > n - k) {
-            k = n - k;
+        // Adiciona 1 para exibição (usuário vê 1-indexado)
+        for (int i = 0; i < centrosCopia.length; i++) {
+            centrosCopia[i]++;
         }
-        long result = 1;
-        for (int i = 0; i < k; i++) {
-            result = result * (n - i) / (i + 1);
-        }
-        return result;
+        return Arrays.toString(centrosCopia);
     }
 }
-
