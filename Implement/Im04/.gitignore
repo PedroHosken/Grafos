@@ -1,0 +1,10 @@
+target/
+*.class
+*.jar
+*.pdf
+*.log
+.idea/
+*.iml
+.vscode/
+relatorio_caminhos_disjuntos.pdf
+
